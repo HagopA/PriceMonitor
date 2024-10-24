@@ -1,4 +1,7 @@
+import platform
 import time
+from datetime import datetime
+from pathlib import Path
 
 import requests
 import schedule
@@ -8,8 +11,39 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from datetime import datetime
 
+
+# Get the correct ChromeDriver path based on the operating system and architecture
+def get_chromedriver_path():
+    # Get the current OS and architecture
+    current_os = platform.system().lower()
+    architecture = platform.machine().lower()
+
+    # Determine the appropriate ChromeDriver file based on OS and architecture
+    if "windows" in current_os:
+        if architecture == "amd64" or architecture == "x86_64":  # 64-bit Windows
+            driver_name = "chromedriver_win64.exe"
+        else:  # 32-bit Windows
+            driver_name = "chromedriver_win32.exe"
+    elif "darwin" in current_os:  # macOS
+        if architecture == "arm64":  # Apple Silicon (ARM-based Macs)
+            driver_name = "chromedriver_mac_arm64"
+        else:  # Intel-based Macs
+            driver_name = "chromedriver_mac_x64"
+    elif "linux" in current_os:
+        driver_name = "chromedriver_linux64"
+    else:
+        raise Exception(f"Unsupported operating system: {current_os} ({architecture})")
+
+    # Build the full path to the ChromeDriver
+    project_root = Path(__file__).parent
+    driver_path = project_root / 'drivers' / 'chrome_130.0.6723.69' / driver_name
+
+    # Check if the driver exists
+    if not driver_path.exists():
+        raise FileNotFoundError(f"ChromeDriver not found at {driver_path}")
+
+    return driver_path
 
 # Function to check the price of a product
 def check_price(url, target_price, product_name, alerted):
@@ -18,10 +52,10 @@ def check_price(url, target_price, product_name, alerted):
     chrome_options.add_argument("--headless")  # Optional: run in headless mode
 
     # Specify the full path to the ChromeDriver executable
-    webdriver_path = r'C:\\Users\\Hagop\\PycharmProjects\\PriceMonitor\\driver\\chromedriver.exe'
+    webdriver_path = get_chromedriver_path()
 
     # Set up WebDriver service
-    service = Service(webdriver_path)
+    service = Service(str(webdriver_path))
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     # Open the webpage
