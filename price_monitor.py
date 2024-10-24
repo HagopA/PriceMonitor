@@ -9,7 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 
@@ -65,10 +65,11 @@ def check_price(url, target_price, product_name, alerted):
     time.sleep(5)
 
     try:
-        # Use the provided XPath to locate the price element
-        price_element = WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located(
-                (By.XPATH, '/html/body/div[1]/div/div[2]/div[3]/section[4]/div[1]/div/div[1]/span/div/div'))
+        # Wait for the element to be present in the DOM
+        price_element = WebDriverWait(driver, 5).until(
+            expected_conditions.presence_of_element_located(
+                (By.CSS_SELECTOR,
+                 "#ID_VARIANTS_COMPONENT > div > div.variantOptionsBoxContainer_R2jnc > div.optionBox_3I57G.variantOptionTextWithPrice_1kbUz.isSelected_3g8j6 > p.price_3O7LI"))
         )
 
         # Get the text of the element which contains the price
