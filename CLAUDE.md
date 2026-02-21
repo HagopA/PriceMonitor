@@ -15,11 +15,10 @@ PriceMonitor is a lightweight Python script that polls product prices on Canadia
 ```
 PriceMonitor/
 ├── price_monitor.py        # Entry point: logging setup, product lists, scheduler
+├── utils.py                # Shared utilities used by all retailer modules
 ├── bestbuy/
-│   ├── __init__.py         # Empty package marker
 │   └── monitor.py          # BestBuy CA API integration + Discord alert logic
 └── homedepot/
-    ├── __init__.py         # Empty package marker
     └── monitor.py          # Home Depot CA API integration + Discord alert logic
 ```
 
@@ -55,27 +54,40 @@ Each product is a dict with four keys:
 - `alerted` — in-memory flag; prevents duplicate alerts within a cycle; starts as `False`
 
 **Current product lists:**
-- `bestbuy_products` — 13 large-screen TVs (65"–77", various brands)
+- `bestbuy_products` — 1 stroller (Cybex Gazelle S 2 Second Seat); 13 TVs commented out
 - `homedepot_products` — 1 baseboard heater
 
-### Scheduling (`price_monitor.py` lines 69–71)
+### Scheduling (`price_monitor.py`)
 
 ```python
-# BestBuy monitoring is DISABLED (commented out)
-# schedule.every(1).hours.at(':00').do(bestbuy.monitor.monitor_products, bestbuy_products)
+# BestBuy runs every hour on the hour
+schedule.every(1).hours.at(':00').do(bestbuy.monitor.monitor_products, bestbuy_products)
 
-# Home Depot runs every hour on the hour
-schedule.every(1).hours.at(':00').do(homedepot.monitor.monitor_products, homedepot_products)
+# Home Depot monitoring is DISABLED (commented out)
+# schedule.every(1).hours.at(':00').do(homedepot.monitor.monitor_products, homedepot_products)
 
 # Resets `alerted` flags every 2 days at 06:00 AM
-schedule.every(2).days.at("06:00").do(reset_alerted_status, homedepot_products)
+schedule.every(2).days.at("06:00").do(reset_alerted_status, bestbuy_products)
 ```
 
-> **Note:** BestBuy monitoring is intentionally commented out. Re-enable by uncommenting and adding its product list to `reset_alerted_status` if needed.
+> **Note:** Home Depot monitoring is intentionally commented out. Re-enable by uncommenting and adding its product list to `reset_alerted_status` if needed.
 
 ### Discord Webhook URLs
 
-Webhook URLs are hardcoded inside each retailer's `monitor.py` inside the `send_alert()` function — not in `price_monitor.py`.
+Each retailer's `monitor.py` defines a module-level `WEBHOOK_URL` constant at the top of the file.
+
+---
+
+## Shared Utilities (`utils.py`)
+
+`utils.py` contains logic common to all retailer modules:
+
+| Name | Type | Purpose |
+|---|---|---|
+| `BROWSER_HEADERS` | constant | Spoofed browser `User-Agent` headers sent with every API request |
+| `monitor_products` | `(products, check_price_fn)` | Iterates products, calls the retailer's `check_price`, writes blank log separator |
+| `fetch_json` | `(url, product_id, valid_status_codes=(200,))` | Makes HTTP GET with `BROWSER_HEADERS`; returns parsed JSON or `None` on failure |
+| `post_discord_alert` | `(webhook_url, message_content, log_message)` | POSTs to a Discord webhook and logs the alert |
 
 ---
 
@@ -85,12 +97,10 @@ Each retailer module (`bestbuy/monitor.py`, `homedepot/monitor.py`) exposes the 
 
 | Function | Signature | Purpose |
 |---|---|---|
-| `monitor_products` | `(products: list)` | Iterates products, calls `check_price`, writes blank log separator |
+| `monitor_products` | `(products: list)` | Delegates to `utils.monitor_products` with the retailer's `check_price` |
 | `check_price` | `(product: dict) -> bool` | Fetches price, logs it, triggers alert if threshold met; returns new `alerted` state |
-| `fetch_product_data` | `(product_id: str) -> list\|None` | Makes HTTP GET to retailer API; returns parsed JSON or `None` on failure |
-| `send_alert` | `(...)` | POSTs a Discord webhook message and logs the alert |
-
-A 1-second `time.sleep(1)` is inserted between each product request inside `monitor_products` to avoid rate-limiting.
+| `fetch_product_data` | `(product_id: str) -> list\|None` | Builds the retailer API URL, delegates HTTP call to `utils.fetch_json` |
+| `send_alert` | `(...)` | Builds retailer-specific message strings, delegates POST to `utils.post_discord_alert` |
 
 ### API Endpoints
 
@@ -109,26 +119,23 @@ GET https://www.homedepot.ca/api/productsvc/v1/products-localized-basic?products
 - Response fields used: `optimizedPrice.displayPrice.value`, `optimizedPrice.wasprice.value`, `optimizedPrice.percentSaving`
 - Store ID `7159` and language `en` are hardcoded
 
-Both APIs are called with a spoofed browser `User-Agent` header to avoid blocking.
-
 ---
 
 ## Adding a New Retailer
 
-1. Create the package directory and files:
+1. Create the package directory and module file:
    ```
    <retailer>/
-   ├── __init__.py    # empty
    └── monitor.py
    ```
 
-2. Implement the four standard functions in `monitor.py` following the pattern in `bestbuy/monitor.py` or `homedepot/monitor.py`.
+2. At the top of `monitor.py`, define a `WEBHOOK_URL` constant with the Discord webhook URL.
 
-3. Hardcode the Discord webhook URL inside `send_alert()` in the new module.
+3. Implement the four standard functions in `monitor.py`, using `utils.monitor_products`, `utils.fetch_json`, and `utils.post_discord_alert` for the shared logic.
 
 4. In `price_monitor.py`:
    - Add `import <retailer>.monitor`
-   - Add a `<retailer>_products` list
+   - Add a `<retailer>_products` list inside `main()`
    - Add a `schedule.every(...)` line
    - Pass the product list to `reset_alerted_status` in its schedule entry
 
@@ -136,7 +143,7 @@ Both APIs are called with a spoofed browser `User-Agent` header to avoid blockin
 
 ## Code Conventions
 
-- **Naming:** `snake_case` for all functions and variables
+- **Naming:** `snake_case` for all functions and variables; `UPPER_CASE` for module-level constants
 - **Error handling:** `try`/`except` is not used; instead, non-200 HTTP responses are caught via status code checks, logged as warnings, and return `None` — the caller skips gracefully
 - **Logging:** Root logger is configured in `price_monitor.py`; all modules use `logging.info()` and `logging.warning()` directly
 - **State:** The `alerted` flag on each product dict is mutated in place by `monitor_products` (`product['alerted'] = check_price(product)`). This state lives only in memory and resets on restart.
@@ -146,8 +153,8 @@ Both APIs are called with a spoofed browser `User-Agent` header to avoid blockin
 
 ## Known Gotchas
 
-- **BestBuy is disabled.** Line 69 of `price_monitor.py` is commented out. Do not assume BestBuy monitoring is running.
+- **Home Depot is disabled.** The Home Depot schedule line in `price_monitor.py` is commented out. Do not assume Home Depot monitoring is running.
 - **State resets on restart.** All `alerted` flags return to `False` when the process restarts, so alerts may fire again immediately for products already at or below target.
 - **No `requirements.txt`.** Install `requests` and `schedule` manually before running.
-- **`reset_alerted_status` only covers Home Depot.** If BestBuy is re-enabled, add `bestbuy_products` to the reset schedule call too.
+- **`reset_alerted_status` only covers BestBuy.** If Home Depot is re-enabled, add `homedepot_products` to the reset schedule call too.
 - **Home Depot `was_price` can be `None`** when the item is not on sale. The `check_price` function in `homedepot/monitor.py` falls back to `sale_price` for both the regular and sale price in that case.
