@@ -12,13 +12,11 @@ import homedepot.monitor
 LOG_FOLDER = "logs"
 
 
-# Function to get the log filename based on the current date
 def get_log_filename():
     today_date = datetime.now().strftime("%Y_%m_%d")
     return os.path.join(LOG_FOLDER, f"price_monitor_{today_date}.log")
 
 
-# Function to set up the logging configuration
 def setup_logging():
     log_file_path = get_log_filename()
     file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=7)
@@ -33,7 +31,6 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 
 
-# Function to reset the alerted status of all products (run every other day)
 def reset_alerted_status(products):
     for product in products:
         product['alerted'] = False
@@ -66,7 +63,6 @@ def main():
         {'product_id': '1001006914', 'product_name': 'Stelpro 1000W Baseboard Heater', 'target_price': 70, 'alerted': False},
     ]
 
-    # Scheduling tasks
     schedule.every(1).hours.at(':00').do(bestbuy.monitor.monitor_products, bestbuy_products)
     # schedule.every(1).hours.at(':00').do(homedepot.monitor.monitor_products, homedepot_products)
     schedule.every(2).days.at("06:00").do(reset_alerted_status, bestbuy_products)

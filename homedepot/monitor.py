@@ -1,16 +1,15 @@
 import logging
+import os
 
 import utils
 
-WEBHOOK_URL = 'https://discord.com/api/webhooks/1334619793025925203/Il8yPSV08Dm5x2-cYCk04xImoRdbt_8PWNOCzXlSz3N_5u1C_iCIKCPRX1Zvb6trVAUQ'
+WEBHOOK_URL = os.environ.get('HOMEDEPOT_DISCORD_WEBHOOK_URL', '')
 
 
-# Function to monitor the list of products
 def monitor_products(products):
     utils.monitor_products(products, check_price)
 
 
-# Function to check the price
 def check_price(product):
     product_data = fetch_product_data(product['product_id'])
 
@@ -30,13 +29,11 @@ def check_price(product):
     return product['alerted']
 
 
-# Function to fetch product details from the Home Depot CA API
 def fetch_product_data(product_id):
     url = f"https://www.homedepot.ca/api/productsvc/v1/products-localized-basic?products={product_id}&store=7159&lang=en"
     return utils.fetch_json(url, product_id)
 
 
-# Function to send an alert via Discord
 def send_alert(product_name, sale_price, regular_price, percent_saving):
     savings = f"Saving {percent_saving}." if percent_saving is not None else ''
     message = f"Price alert! The '{product_name}' is now on sale for ${sale_price} from its original price of ${regular_price}. {savings}"
