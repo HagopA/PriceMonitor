@@ -1,17 +1,16 @@
 import logging
+import os
 from datetime import datetime
 
 import utils
 
-WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1298699024924151899/5_GM4ZKIRgFc04fthbYR6YtrcHXT_N-NG1lZVJQwpgCIWRyD2rUR_xnqYKQMMivvfnvh'
+WEBHOOK_URL = os.environ.get('BESTBUY_DISCORD_WEBHOOK_URL', '')
 
 
-# Function to monitor the list of products
 def monitor_products(products):
     utils.monitor_products(products, check_price)
 
 
-# Function to check the price
 def check_price(product):
     product_data = fetch_product_data(product['product_id'])
 
@@ -39,13 +38,11 @@ def check_price(product):
     return product['alerted']
 
 
-# Function to fetch product details from the BestBuy CA API
 def fetch_product_data(product_id):
     url = f"https://www.bestbuy.ca/api/offers/v1/products/{product_id}/offers"
     return utils.fetch_json(url, product_id, valid_status_codes=(200, 304))
 
 
-# Function to send an alert via Discord
 def send_alert(product_name, sale_price, regular_price, sale_end_date_str):
     savings_amount_percent = round((regular_price - sale_price) / regular_price * 100, 2)
     message = (
